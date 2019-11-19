@@ -33,6 +33,12 @@ router.post('/guindaste/atributos',(req,res) => {
   let result = eletroimaStatusBit + alturaBit + anguloBit;
   console.log(alturaBit);
   console.log("doidera");
+
+  serial.write(result);
+
+  // Enviar para o MongoDB
+
+
   res.send(result);
 
 });
@@ -45,46 +51,6 @@ router.post('/guindaste/atributos',(req,res) => {
 //   console.log(novoRegistroBit);
 //   res.send(novoRegistroBit);
 // });
-
-//POST
-//return angle to arduino
-router.post('/guindaste/angle',(req,res) => {
-  let angulo = req.body.angulo;
-  let estado = 3;
-  let verifyPositiveOrNegative = parseInt(angulo, 2);
-  if(verifyPositiveOrNegative < 0) {
-     estado = 252;
-  }
-  estado = createBinaryString(estado);
-  let anguloArduino = estado+angulo;
-  res.send(anguloArduino);
-});
-
-//POST
-//return heigth to arduino
-router.post('/guindaste/heigth',(req,res) => {
-  let altura = req.body.altura;
-  let estado = 2;
-
-  estado = createBinaryString(estado);
-  let alturaArduino = estado+altura;
-  res.send(200, alturaArduino);
-});
-
-//POST
-//return eletroima stats(on/off) to arduino
-router.post('/guindaste/eletroima',(req,res) => {
-  let eletroima = req.body.eletroima;
-  let verifyPositiveOrNegative = parseInt(eletroima, 2);
-  let estado = 0; //Desligado
-  if(verifyPositiveOrNegative > 0) {
-    estado = 1; //Ligado
-  }
-  estado = createBinaryString(estado);
-  estadoArduino = estado+eletroima;
-  res.send(estadoArduino);
-  // serialPort.write(estadoArduino);
-});
 
 function createBinaryStringWith9bits(nMask) {
   let result;
