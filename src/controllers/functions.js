@@ -1,8 +1,7 @@
 const express = require('express');
 const serialPort = require("serialport");
 const cranedb = require('mysql');
-// const Crane = require("../models/crane");
-// const mongodb = require('mongodb');
+const Readline = require('@serialport/parser-readline');
 
 //Configuracao do banco
 var dbConn = cranedb.createConnection({
@@ -24,10 +23,32 @@ serial.on('open', function(){
     console.log("ta funcionando: , ",data);
   });
 });
+const parser = serial.pipe(new Readline({ delimiter: '\n' }));
+// Read the port data
+parser.on('data', data =>{
+  console.log('got word from arduino:', data);
+});
 
 //GET
 router.get('/',(req,res) => {
   res.send('hello');
+});
+
+//GET Status
+router.get('/guindaste/statusLayout', (req, res) => {
+  const parser = serial.pipe(new Readline({ delimiter: '\n' }));
+// Read the port data
+  parser.on('data', data =>{
+    console.log('got word from arduino:', data);
+  });
+
+  //Tem que ver oq essa data retorna e fazer o set dela nos campos do objeto array, para mandar para o app
+  let array = {
+    altura: data.altura,
+    angulo: data.angulo,
+    eletroima: data.eletroima
+  };
+  res.send({array});
 });
 
 //GET Historico
