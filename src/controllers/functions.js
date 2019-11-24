@@ -1,157 +1,153 @@
 const express = require('express');
 const serialPort = require("serialport");
-const cranedb = require('mysql');
+const mysql = require('mysql');
 const Readline = require('@serialport/parser-readline');
+const bodyParser = require('body-parser');
 
-//Configuracao do banco
-var dbConn = cranedb.createConnection({
+const app = express();
+app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.json());
+
+// Create connection
+const db = mysql.createConnection({
   host: 'localhost',
-  user: 'root',
+  user: 'pedro',
   password: '140497',
   database: 'crane'
 });
-// connect to database
-dbConn.connect();
+// Connect
+db.connect((err) => {
+  if (err) {
+    throw err;
+  }
+  console.log('MySql Connected...');
+});
 
 // Inicio da aplicacao
 const router = express.Router();
 let serial;
-serial = new serialPort("/dev/ttyUSB0" , { baudRate : 9600 });
-serial.on('open', function(){
+serial = new serialPort("/dev/ttyUSB0", {baudRate: 9600});
+serial.on('open', function () {
   console.log('Serial Port Open');
-  serial.on('data', function(data){
-    console.log("ta funcionando: , ",data);
+  serial.on('data', function (data) {
+    console.log("ta funcionando: , ", data);
   });
-});
-const parser = serial.pipe(new Readline({ delimiter: '\n' }));
-// Read the port data
-parser.on('data', data =>{
-  console.log('got word from arduino:', data);
 });
 
 //GET
-router.get('/',(req,res) => {
+router.get('/', (req, res) => {
   res.send('hello');
 });
 
-//GET Status
-router.get('/guindaste/statusLayout', (req, res) => {
-  const parser = serial.pipe(new Readline({ delimiter: '\n' }));
-// Read the port data
-  parser.on('data', data =>{
-    console.log('got word from arduino:', data);
-  });
-
-  //Tem que ver oq essa data retorna e fazer o set dela nos campos do objeto array, para mandar para o app
-  let array = {
-    altura: data.altura,
-    angulo: data.angulo,
-    eletroima: data.eletroima
-  };
-  res.send({array});
-});
-
-//GET Historico
-router.get('/guindaste/status', (req, res) => {
-  dbConn.query('SELECT altura,angulo,eletroima FROM crane limit 5');
-});
-
-//POST ANTIGO
-// router.post('/guindaste/atributos',(req,res) => {
-//   let registroBit = req.body.registro;
-//   let alturaBit = registroBit.altura; //+32
-//   let anguloBit = registroBit.angulo + 180; //+180
-//   let eletroimaStatusBit = registroBit.eletroimaStatus;
-//
-//   // Pegar Valores do banco
-//   let registroBd = getLastResult();
-//   console.log(registroBd);
-//   let anguloBd = registroBd.angulo;
-//   let alturaBd = registroBd.altura;
-//
-//   // Calculo do angulo
-//   let distAngulo = anguloBit - anguloBd;
-//
-//   if(distAngulo < -180 || distAngulo > 180) {
-//     if(distAngulo > 180) {
-//       distAngulo = distAngulo - 360;
-//     } else {
-//       distAngulo  = distAngulo + 360;
-//     }
-//   }
-//   //Calculo da altura
-//   let distAltura = alturaBit - alturaBd;
-//   distAltura = distAltura + 32;
-//
-//   // Enviar para o Banco de Dados
-//   postStatus(alturaBit,anguloBit,eletroimaStatusBit);
-//
-//   //Conversão para Bit
-//   alturaBit = createBinaryStringWith6bits(distAltura);
-//   anguloBit = createBinaryStringWith9bits(distAngulo);
-//   eletroimaStatusBit = createBinaryStringWith1bits(eletroimaStatusBit);
-//
-//   let result = anguloBit + alturaBit + eletroimaStatusBit;
-//   console.log(alturaBit);
-//
-//   // Envia os dados para o Arduino
-//   serial.write(result);
-//
-//   res.send({registroBd});
-// });
-
-//POST
-router.post('/guidaste/atributos',(req,res) => {
+// POST ANTIGO
+router.post('/guindaste/atributos', (req, res) => {
   let registroBit = req.body.registro;
+  let nome = registroBit.nomeOperador;
   let alturaBit = registroBit.altura;
   let anguloBit = registroBit.angulo;
   let eletroimaStatusBit = registroBit.eletroimaStatus;
 
   // Pegar Valores do banco
-  let registroBd = getLastResult();
-  let anguloBd = registroBd.angulo;
-  let alturaBd = registroBd.altura;
+  let sql = `SELECT angulo,altura FROM crane ORDER BY id DESC LIMIT 1`;
+  let query = db.query(sql, (err, results) => {
+    if (err) throw err;
+    console.log(results);
 
+    let registroBd = JSON.parse(JSON.stringify(results[0]));
+    console.log(registroBd);
+
+    let anguloBd = registroBd.angulo;
+    let alturaBd = registroBd.altura;
+
+    console.log(anguloBd);
+    console.log(alturaBd);
+    // Verificar se e Positivo ou Negativo
+    let sinalAltura = 1;
+    if (alturaBit < 0) {
+      sinalAltura = 0;
+    }
+    let sinalAngulo = 1;
+    if (anguloBit < 0) {
+      sinalAngulo = 0;
+    }
+    //VERIFICAR O CALCULO
+    // Calculo do angulo
+    let distAngulo = anguloBit - anguloBd;
+    console.log(distAngulo);
+    // Calculo do altura
+    let distAltura = alturaBit - alturaBd;
+
+    //Conversão para Bit
+    alturaBit = createBinaryStringWith5bits(distAltura);
+    anguloBit = createBinaryStringWith8bits(distAngulo);
+    eletroimaStatusBit = createBinaryStringWith1bits(eletroimaStatusBit);
+
+    let result = sinalAngulo + anguloBit + sinalAltura + alturaBit + eletroimaStatusBit;
+    console.log(result);
+
+    // Envia os dados para o Arduino
+    serial.write(result);
+
+  });
   // Enviar para o Banco de Dados
-  postStatus(alturaBit,anguloBit,eletroimaStatusBit);
-
-  //Verificar se e Positivo ou Negativo
-  let sinalAltura = 1;
-  if(alturaBit < 0) {
-    sinalAltura = 0;
-  }
-  let sinalAngulo = 1;
-  if(anguloBit < 0) {
-    sinalAngulo = 0;
-  }
-  // Calculo do angulo
-  let distAngulo = anguloBit - anguloBd;
-  // Calculo do altura
-  let distAltura = alturaBit - alturaBd;
-
-  //Conversão para Bit
-  alturaBit = createBinaryStringWith5bits(distAltura);
-  anguloBit = createBinaryStringWith8bits(distAngulo);
-  eletroimaStatusBit = createBinaryStringWith1bits(eletroimaStatusBit);
-
-  let result = sinalAngulo + anguloBit + sinalAltura + alturaBit + eletroimaStatusBit;
-  console.log(alturaBit);
-
-  // Envia os dados para o Arduino
-  serial.write(result);
-
-  res.send({registroBd});
+  postStatus(nome, alturaBit, anguloBit, eletroimaStatusBit);
+  res.send("deu bom doidao");
 });
 
-function postStatus(nome,angulo, altura, eletroima) {
-  // VALUES or SET ??
-  dbConn.query('INSERT INTO crane(nome,altura,angulo,eletroima) VALUES (?,?,?,?)', {nome:nome, altura:altura, angulo:angulo, eletroima:eletroima});
+function postStatus(nome, altura, angulo, eletroima) {
+  const sql = `INSERT INTO crane(nome,altura,angulo,eletroima) VALUES('${nome}','${altura}','${angulo}','${eletroima}')`;
+  let query = db.query(sql, (err, results) => {
+    if (err) throw err;
+    console.log(results);
+  });
 }
 
 function getLastResult() {
-  console.log("vovozinha");
-  dbConn.query('SELECT angulo,altura FROM crane ORDER BY id DESC LIMIT 1');
+  let sql = `SELECT angulo,altura FROM crane ORDER BY id DESC LIMIT 1`;
+  let query = db.query(sql, (err, results) => {
+    if (err) throw err;
+    console.log(results);
+    return results;
+  });
+
 }
+
+function search(nameKey, myArray){
+  for (var i=0; i < myArray.length; i++) {
+    if (myArray[i].name === nameKey) {
+      return myArray[i];
+    }
+  }
+}
+
+//GET Historico
+router.get('/guindaste/status', (req, res) => {
+  let sql = `SELECT altura,angulo,eletroima FROM crane limit 5`;
+  let query = db.query(sql, (err, results) => {
+    if (err) throw err;
+    console.log(results);
+    var rows = JSON.parse(JSON.stringify(results[0]));
+    res.send(rows);
+  });
+});
+
+router.post('/guindaste/createDatabase', (req, res) => {
+  const sql = `CREATE DATABASE crane`;
+  let query = db.query(sql, (err, results) => {
+    if (err) throw err;
+    console.log(results);
+    res.send("Database criada");
+  });
+});
+
+router.post('/guindaste/createTable', (req, res) => {
+  const sql = `CREATE TABLE IF NOT EXISTS crane (id INT AUTO_INCREMENT PRIMARY KEY,nome VARCHAR(255) NOT NULL,altura int(11),angulo int(11),eletroima int(11))`;
+  let query = db.query(sql, (err, results) => {
+    if (err) throw err;
+    console.log(results);
+    res.send("Tabela criada");
+  });
+});
 
 function createBinaryStringWith9bits(nMask) {
   let result;
@@ -161,6 +157,7 @@ function createBinaryStringWith9bits(nMask) {
   result = sMask.substring(23, 32);
   return result;
 }
+
 function createBinaryStringWith6bits(nMask) {
   let result;
   for (var nFlag = 0, nShifted = nMask, sMask = ''; nFlag < 32;
@@ -169,6 +166,7 @@ function createBinaryStringWith6bits(nMask) {
   result = sMask.substring(26, 32);
   return result;
 }
+
 function createBinaryStringWith5bits(nMask) {
   let result;
   for (var nFlag = 0, nShifted = nMask, sMask = ''; nFlag < 32;
@@ -177,6 +175,7 @@ function createBinaryStringWith5bits(nMask) {
   result = sMask.substring(27, 32);
   return result;
 }
+
 function createBinaryStringWith8bits(nMask) {
   let result;
   for (var nFlag = 0, nShifted = nMask, sMask = ''; nFlag < 32;
@@ -185,6 +184,7 @@ function createBinaryStringWith8bits(nMask) {
   result = sMask.substring(24, 32);
   return result;
 }
+
 function createBinaryStringWith1bits(nMask) {
   let result;
   for (var nFlag = 0, nShifted = nMask, sMask = ''; nFlag < 32;
@@ -193,4 +193,5 @@ function createBinaryStringWith1bits(nMask) {
   result = sMask.substring(31, 32);
   return result;
 }
+
 module.exports = router;

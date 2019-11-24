@@ -5,8 +5,9 @@ const app =   express();
 const bodyParser = require('body-parser');
 
 // Middleware
-app.use(bodyParser.json());
 app.use(cors());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
 
 const functions = require('./controllers/functions');
 app.use('/controllers/function', functions);
